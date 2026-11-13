@@ -190,6 +190,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
       </div>
       <p class="empty" style="padding:8px 0 4px;font-size:12px">Or drag &amp; drop / paste an image. PNGs with transparency get a tight mesh.</p>
       <input type="file" id="file" accept="image/*">
+      <div id="scaleBox" style="margin-top:8px"></div>
     </div>
 
     <div class="sec">
@@ -308,7 +309,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
         <kbd>Click</kbd><span>In pin tools: drop a pin</span>
         <kbd>Ring edge</kbd><span>Drag to resize a pin</span>
         <kbd>Wheel</kbd><span>Zoom the view (pin tools: resize pin under cursor)</span>
-        <kbd>Alt+wheel</kbd><span>Scale the image itself</span>
+        <kbd>Alt+wheel</kbd><span>Scale the image itself (or <b>[</b> <b>]</b>, or the Image scale slider)</span>
         <kbd>Drag empty</kbd><span>Pan the view (or middle-mouse drag)</span>
         <kbd>− = 0 F</kbd><span>Zoom out / in / 100% / fit</span>
         <kbd>Space</kbd><span>Hold for Move tool</span>
@@ -935,7 +936,7 @@ canvas.addEventListener('wheel', e => {
     setZoom(view.zoom * f, e.clientX - r.left, e.clientY - r.top);
     return;
   }
-  const ns = Math.min(20, Math.max(0.03, img.scale * f)), k = ns / img.scale;
+  const ns = Math.min(8, Math.max(0.03, img.scale * f)), k = ns / img.scale;
   img.x = wx + (img.x - wx) * k; img.y = wy + (img.y - wy) * k; img.scale = ns;
 }, { passive: false });
 
@@ -959,6 +960,8 @@ addEventListener('keydown', e => {
   else if (k === 'p') setTool('jiggle');
   else if (k === 'a') setTool('anchor');
   else if (k === 'k') setTool('peel');
+  else if (k === '[') nudgeScale(1 / 1.1);
+  else if (k === ']') nudgeScale(1.1);
   else if (k === 'u') resetPeel();
   else if (k === 'j') jolt();
   else if (k === 'r') recenter();
@@ -986,6 +989,13 @@ function slider(parent, { label, min, max, step, value, fmt, onInput }) {
   return { set(v) { input.value = v; show(v); }, el };
 }
 
+// image scale (log slider so small and big sizes both get room); also Alt+wheel and [ ]
+const scaleUI = slider($('scaleBox'), { label: 'Image scale', min: -5, max: 3, step: 0.01, value: 0,
+  fmt: v => { const k = 2 ** v; return `${Math.round(k * 100)}% · ${Math.round(W * k)}×${Math.round(H * k)}`; },
+  onInput: v => { if (srcImage && !busy) img.scale = 2 ** v; } });
+let shownScale = -1;
+function syncScaleUI() { if (Math.abs(shownScale - img.scale) > 1e-5) { shownScale = img.scale; scaleUI.set(+Math.log2(img.scale).toFixed(3)); } }
+const nudgeScale = f => { if (srcImage && !busy) img.scale = Math.min(8, Math.max(0.03, img.scale * f)); };
 const physBox = $('physSliders');
 slider(physBox, { label: 'Gravity (droop)', min: 0, max: 3000, step: 10, value: S.gravity, fmt: v => v.toFixed(0), onInput: v => S.gravity = v });
 slider(physBox, { label: 'Stretch limit', min: 0.1, max: 2, step: 0.01, value: S.stretch, fmt: v => Math.round(v * 100) + '%', onInput: v => S.stretch = v });
@@ -1797,6 +1807,7 @@ function frame(now) {
     applyPeel(peel.active ? peel : null);
     group.position.set(img.x, img.y, 0); group.rotation.z = img.rot; group.scale.setScalar(img.scale);
     updatePinVisuals();
+    syncScaleUI();
     material.uniforms.uShowW.value = S.showWeights ? 1 : isPinTool() ? 0.55 : 0;
     prevT = snapT();
     if (REC.on) recSample(now);
