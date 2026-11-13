@@ -1,0 +1,1613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jiggle Puppet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0e12; --stage:#121318; --panel:#16181f; --panel2:#1c1f28; --line:#292d39;
+  --text:#ecedf2; --mute:#8b90a1; --dim:#5d6273;
+  --pink:#ff4fa3; --pink2:#ff86c1; --yellow:#ffd23f; --blue:#58b6ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 Inter,system-ui,sans-serif;overflow:hidden}
+button{font:inherit;color:inherit}
+#app{display:flex;height:100%}
+#stage{position:relative;flex:1;min-width:0;overflow:hidden;
+  background:
+    radial-gradient(circle at 50% 45%, #1a1c24 0%, var(--stage) 70%),
+    var(--stage);
+  touch-action:none}
+#stage::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(#ffffff08 1px,transparent 1px),linear-gradient(90deg,#ffffff08 1px,transparent 1px);
+  background-size:32px 32px;background-position:center}
+#stage canvas{position:absolute;inset:0;display:block;z-index:1}
+#zoomUI{position:absolute;right:12px;top:50%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;gap:2px;padding:4px;background:#1a1c24ee;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 30px #0008}
+#zoomUI button{border:0;background:transparent;color:var(--mute);width:44px;height:32px;border-radius:8px;cursor:pointer;font:600 15px Inter,sans-serif}
+#zoomUI button:hover{background:#ffffff12;color:var(--text)}
+#zoomUI #zPct{font:500 11px "JetBrains Mono",monospace;height:26px}
+#zoomUI #zFit{font-size:11px;font-weight:600}
+#refbg{position:absolute;left:0;top:0;width:100%;height:100%;z-index:0;transform-origin:50% 50%;background-position:center;background-repeat:no-repeat;background-size:cover;pointer-events:none}
+.field{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;color:var(--mute)}
+.field select{flex:1;min-width:0;max-width:200px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font:inherit;cursor:pointer}
+.field input[type=color]{width:46px;height:30px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);padding:2px;cursor:pointer}
+.field[hidden]{display:none}
+.dims{display:flex;align-items:center;gap:6px;margin-bottom:10px;color:var(--mute)}
+.dims[hidden]{display:none}
+.dims input{width:0;flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font:500 12px "JetBrains Mono",monospace}
+.toggle[hidden]{display:none}
+.limhead{display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px;padding-top:12px;border-top:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600}
+.limhead[hidden]{display:none}
+.limhead button{border:0;background:none;color:var(--mute);cursor:pointer;font:500 12px Inter,sans-serif;text-transform:none;letter-spacing:0;text-decoration:underline;text-underline-offset:3px}
+.slider[hidden]{display:none}
+.btn:disabled{opacity:.4;cursor:default;pointer-events:none}
+.btn.rec .rdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#ff4a4a;margin-right:7px}
+.btn.rec.on{background:#ff4a4a22;border-color:#ff4a4a;color:#ffc2c2}
+.btn.rec.on .rdot{border-radius:2px;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+#badge{position:absolute;top:66px;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:6;display:flex;align-items:center;gap:10px;padding:5px 5px 5px 12px;border-radius:999px;font:600 13px "JetBrains Mono",monospace;background:#2a1014ee;border:1px solid #ff4a4a;color:#ffc2c2}
+#badge[hidden]{display:none}
+#badge i{width:9px;height:9px;border-radius:50%;background:#ff4a4a;animation:blink 1s infinite}
+#badge button{border:0;background:#ff4a4a;color:#fff;border-radius:999px;padding:4px 11px;cursor:pointer;font:600 12px Inter,sans-serif}
+#badge.play{background:#0f1d2bee;border-color:var(--blue);color:#bfe2ff}
+#badge.play i{background:var(--blue);border-radius:2px;animation:none}
+#badge.play button{background:var(--blue);color:#04121f}
+#busy{position:fixed;inset:0;z-index:50;background:#07080bcc;display:flex;align-items:center;justify-content:center;padding:16px}
+#busy[hidden]{display:none}
+#busy .box{width:min(380px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 20px 60px #000a}
+#busyTitle{font-weight:700;font-size:15px;margin-bottom:12px}
+#busy .bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-bottom:10px}
+#busy .bar i{display:block;height:100%;width:0;background:var(--pink);transition:width .1s}
+#busyInfo{color:var(--mute);margin-bottom:14px;font-size:12px;min-height:1.4em}
+
+#toolbar{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;gap:4px;padding:5px;
+  background:#1a1c24ee;border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(8px);box-shadow:0 8px 30px #0008}
+.tool{display:flex;align-items:center;gap:7px;border:0;background:transparent;padding:7px 11px;border-radius:8px;cursor:pointer;color:var(--mute);font-weight:500;white-space:nowrap}
+.tool:hover{color:var(--text);background:#ffffff0a}
+.tool.active{background:#ffffff14;color:var(--text)}
+.tool kbd{font:500 10px "JetBrains Mono",monospace;color:var(--dim);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.tool svg{width:16px;height:16px}
+.tool[data-tool=jiggle].active svg{color:var(--pink)}
+.tool[data-tool=anchor].active svg{color:var(--yellow)}
+
+#hint{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;padding:8px 14px;border-radius:999px;
+  background:#1a1c24e6;border:1px solid var(--line);color:var(--mute);white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+#hint b{color:var(--text);font-weight:600}
+
+#drop{position:absolute;inset:12px;z-index:10;border:2px dashed var(--pink);border-radius:18px;background:#ff4fa314;display:none;
+  align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--pink2);pointer-events:none}
+#drop.on{display:flex}
+
+#empty{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;padding:16px}
+#empty[hidden]{display:none}
+#empty .card{width:min(420px,100%);padding:38px 28px 28px;border:2px dashed #3a3f4f;border-radius:20px;background:#16181fcc;text-align:center;cursor:pointer;transition:.15s}
+#empty .card:hover{border-color:var(--pink);background:#ff4fa30d}
+#empty .ico{width:56px;height:56px;margin:0 auto 14px;border-radius:16px;background:#ff4fa31f;color:var(--pink);display:flex;align-items:center;justify-content:center}
+#empty .ico svg{width:28px;height:28px}
+#empty h3{margin:0 0 6px;font-size:19px;font-weight:700;letter-spacing:-.01em}
+#empty p{margin:0 0 18px;color:var(--mute)}
+#empty .btn{display:inline-block;flex:none;padding:10px 18px}
+#empty .demo{display:block;margin:14px auto 0;background:none;border:0;color:var(--mute);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+#empty .demo:hover{color:var(--text)}
+#empty .err{color:#ff8080;margin:12px 0 0}
+#hint[hidden]{display:none}
+#panel{width:300px;flex:none;background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:18px 16px 28px}
+h1{font-size:18px;font-weight:800;letter-spacing:-.02em;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+h1 i{width:10px;height:10px;border-radius:50%;background:var(--pink);box-shadow:0 0 12px var(--pink);display:inline-block}
+.sub{color:var(--mute);margin:0 0 16px}
+.sec{border-top:1px solid var(--line);padding:14px 0 4px}
+.sec h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 10px;font-weight:600}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--panel2);padding:8px 11px;border-radius:8px;cursor:pointer;font-weight:500;flex:1;white-space:nowrap}
+.btn:hover{border-color:#3a3f4f;background:#232733}
+.btn.primary{background:var(--pink);border-color:var(--pink);color:#1a0010;font-weight:700}
+.btn.primary:hover{background:var(--pink2)}
+.btn.danger:hover{border-color:#ff5d5d;color:#ff8080}
+.slider{margin:0 0 12px}
+.slider .lab{display:flex;justify-content:space-between;margin-bottom:5px;color:var(--mute)}
+.slider .lab span:last-child{font:500 11px "JetBrains Mono",monospace;color:var(--text)}
+input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:var(--line);outline:none;margin:0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--text);cursor:pointer;border:0}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--text);cursor:pointer;border:0}
+.pincard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 12px 4px;margin-bottom:6px}
+.pincard .ttl{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:12px}
+.pincard .ttl i{width:10px;height:10px;border-radius:50%}
+.pincard .ttl button{margin-left:auto;flex:none;padding:4px 9px;font-size:12px}
+.empty{color:var(--dim);padding:2px 0 12px}
+.toggle{display:flex;align-items:center;justify-content:space-between;padding:6px 0;cursor:pointer;color:var(--mute);user-select:none}
+.toggle:hover{color:var(--text)}
+.toggle input{display:none}
+.toggle .sw{width:30px;height:17px;border-radius:9px;background:var(--line);position:relative;transition:.15s}
+.toggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--mute);transition:.15s}
+.toggle input:checked + .sw{background:var(--pink)}
+.toggle input:checked + .sw::after{left:15px;background:#fff}
+.seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px;margin-bottom:12px}
+.seg button{flex:1;border:0;background:transparent;padding:6px 4px;border-radius:6px;cursor:pointer;color:var(--mute);font-weight:500}
+.seg button.on{background:#ffffff14;color:var(--text)}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;color:var(--mute);font-size:12px}
+.keys kbd{font:500 10.5px "JetBrains Mono",monospace;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;justify-self:start}
+#file{display:none}
+
+@media (max-width:760px){
+  #app{flex-direction:column}
+  #panel{width:auto;height:42%;border-left:0;border-top:1px solid var(--line)}
+  .tool span{display:none}
+  #hint{font-size:12px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <div id="refbg"></div>
+    <div id="badge" hidden><i></i><span id="badgeText"></span><button id="badgeStop" type="button">Stop</button></div>
+    <div id="toolbar">
+      <button class="tool active" data-tool="move" title="Move image (V)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+        <span>Move</span><kbd>V</kbd></button>
+      <button class="tool" data-tool="jiggle" title="Jiggle pin (P)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+        <span>Jiggle pin</span><kbd>P</kbd></button>
+      <button class="tool" data-tool="anchor" title="Anchor pin (A)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0014 0M8 11h8"/></svg>
+        <span>Anchor pin</span><kbd>A</kbd></button>
+    </div>
+    <div id="hint"></div>
+    <div id="zoomUI">
+      <button id="zIn" type="button" title="Zoom in (=)">+</button>
+      <button id="zPct" type="button" title="Reset to 100% (0)">100%</button>
+      <button id="zOut" type="button" title="Zoom out (−)">−</button>
+      <button id="zFit" type="button" title="Fit everything (F)">Fit</button>
+    </div>
+    <div id="drop">Drop image to jiggle it</div>
+    <div id="empty">
+      <div class="card" id="emptyCard">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></div>
+        <h3>Upload an image to jiggle</h3>
+        <p>Drop it here, paste it, or pick a file.<br>PNGs with transparent backgrounds work best.</p>
+        <button class="btn primary" type="button">Choose image…</button>
+        <p class="err" id="loadErr" hidden></p>
+        <button class="demo" id="emptyDemo" type="button">or try the demo pudding</button>
+      </div>
+    </div>
+  </div>
+
+  <aside id="panel">
+    <h1><i></i>Jiggle Puppet</h1>
+    <p class="sub">Pin the squishy bits, then shake it.</p>
+
+    <div class="sec" style="border-top:0;padding-top:0">
+      <div class="row">
+        <button class="btn primary" id="openBtn">Upload image…</button>
+        <button class="btn" id="demoBtn" style="flex:0 0 auto">Demo</button>
+      </div>
+      <p class="empty" style="padding:8px 0 4px;font-size:12px">Or drag &amp; drop / paste an image. PNGs with transparency get a tight mesh.</p>
+      <input type="file" id="file" accept="image/*">
+    </div>
+
+    <div class="sec">
+      <h2>Canvas</h2>
+      <label class="field">Size<select id="canvasSel">
+        <option value="stage">Fit window</option>
+        <option value="1080x1920">Instagram Reel / Story · 9:16</option>
+        <option value="1080x1350">Instagram post · 4:5</option>
+        <option value="1080x1080">Square · 1:1</option>
+        <option value="1920x1080">Landscape · 16:9</option>
+        <option value="custom">Custom…</option>
+      </select></label>
+      <div class="dims" id="customRow" hidden>
+        <input type="number" id="cw" min="16" max="4096" step="2" value="1080"><span>×</span>
+        <input type="number" id="ch" min="16" max="4096" step="2" value="1920"><span>px</span>
+      </div>
+      <label class="toggle" id="safeToggle" hidden>Reel safe-zone guide<input type="checkbox" id="tSafe" checked><span class="sw"></span></label>
+      <p class="empty" id="canvasInfo" style="font-size:12px;padding:2px 0 8px"></p>
+    </div>
+
+    <div class="sec">
+      <h2>Record &amp; export</h2>
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn rec" id="recBtn" type="button"><i class="rdot"></i><span>Record</span></button>
+        <button class="btn" id="playBtn" type="button" disabled>▶ Play take</button>
+      </div>
+      <p class="empty" id="takeInfo" style="font-size:12px;padding-bottom:10px"></p>
+      <label class="field">Format<select id="fmt">
+        <option value="zip">PNG sequence, alpha (.zip)</option>
+        <option value="folder">PNG sequence, alpha → folder</option>
+        <option value="webm">WebM video, alpha</option>
+        <option value="mp4">MP4 video, solid background</option>
+      </select></label>
+      <div class="seg" id="fpsSeg"><button data-v="24" type="button">24 fps</button><button data-v="30" class="on" type="button">30 fps</button><button data-v="60" type="button">60 fps</button></div>
+      <label class="field">Size<select id="sizeSel"></select></label>
+      <label class="field">Frame<select id="frameSel">
+        <option value="stage">Whole stage (as seen)</option>
+        <option value="fit">Crop to the motion</option>
+      </select></label>
+      <label class="field" id="bgField" hidden>Background<input type="color" id="bgColor" value="#000000"></label>
+      <button class="btn primary" id="exportBtn" type="button" disabled style="width:100%">Export</button>
+      <p class="empty" id="exportNote" style="font-size:12px;padding:8px 0 6px"></p>
+    </div>
+
+    <div class="sec">
+      <h2>Reference background</h2>
+      <p class="empty" style="font-size:12px;padding-bottom:10px">For lining up only. Never included in exports.</p>
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn" id="refBtn" type="button">Load background…</button>
+        <button class="btn danger" id="refClear" type="button" style="flex:0 0 auto" disabled>Remove</button>
+      </div>
+      <input type="file" id="refFile" accept="image/*" hidden>
+      <div class="seg" id="refFit"><button data-v="cover" class="on" type="button">Fill</button><button data-v="contain" type="button">Fit</button><button data-v="100% 100%" type="button">Stretch</button></div>
+      <div id="refSliders"></div>
+    </div>
+
+    <div class="sec">
+      <h2>Selected pin</h2>
+      <div id="pinEmpty" class="empty">No pin selected. Use the Jiggle pin tool and click the image.</div>
+      <div id="pinCard" class="pincard" hidden>
+        <div class="ttl"><i id="pinDot"></i><span id="pinName">Jiggle pin</span><button class="btn danger" id="delPin">Delete</button></div>
+        <div id="pinSliders"></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>Physics</h2>
+      <div id="physSliders"></div>
+      <h2 style="margin-top:6px">When you let go</h2>
+      <div class="seg" id="throwSeg">
+        <button data-v="stop">Stop</button>
+        <button data-v="glide" class="on">Glide</button>
+        <button data-v="drop">Fall</button>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn" id="joltBtn">Jolt <span style="color:var(--dim)">J</span></button>
+        <button class="btn" id="centerBtn">Recenter <span style="color:var(--dim)">R</span></button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>View</h2>
+      <label class="toggle">Show pins<input type="checkbox" id="tPins" checked><span class="sw"></span></label>
+      <label class="toggle">Weight overlay<input type="checkbox" id="tWeights"><span class="sw"></span></label>
+      <label class="toggle">Mesh wireframe<input type="checkbox" id="tMesh"><span class="sw"></span></label>
+      <div id="viewSliders" style="margin-top:8px"></div>
+      <div class="row"><button class="btn danger" id="clearBtn">Clear all pins</button></div>
+    </div>
+
+    <div class="sec">
+      <h2>Controls</h2>
+      <div class="keys">
+        <kbd>Drag</kbd><span>Move image (shift+drag rotates)</span>
+        <kbd>Drag pin</kbd><span>In Move: pull the jiggle &amp; let go</span>
+        <kbd>Click</kbd><span>In pin tools: drop a pin</span>
+        <kbd>Ring edge</kbd><span>Drag to resize a pin</span>
+        <kbd>Wheel</kbd><span>Zoom the view (pin tools: resize pin under cursor)</span>
+        <kbd>Alt+wheel</kbd><span>Scale the image itself</span>
+        <kbd>Drag empty</kbd><span>Pan the view (or middle-mouse drag)</span>
+        <kbd>− = 0 F</kbd><span>Zoom out / in / 100% / fit</span>
+        <kbd>Space</kbd><span>Hold for Move tool</span>
+        <kbd>Del</kbd><span>Delete pin (or right-click)</span>
+        <kbd>H</kbd><span>Hide / show pins</span>
+        <kbd>Enter</kbd><span>Start / stop recording</span>
+      </div>
+    </div>
+  </aside>
+</div>
+<div id="busy" hidden><div class="box">
+  <div id="busyTitle">Exporting…</div>
+  <div class="bar"><i id="busyBar"></i></div>
+  <div id="busyInfo"></div>
+  <button class="btn" id="busyCancel" type="button" style="width:100%">Cancel</button>
+</div></div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+/* ------------------------------------------------------------------ setup */
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 0);
+stage.prepend(renderer.domElement);
+const canvas = renderer.domElement;
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
+let VW = 1, VH = 1;
+function resize() {
+  const r = stage.getBoundingClientRect();
+  VW = Math.max(1, r.width); VH = Math.max(1, r.height);
+  renderer.setSize(VW, VH, false);
+  canvas.style.width = VW + 'px'; canvas.style.height = VH + 'px';
+  if (FRAME.fixed && view.auto) fitFrameView(); else applyView();
+  if (needsFit && appReady && VW > 40 && VH > 40) { needsFit = false; recenter(); }
+}
+var needsFit = true, appReady = false;
+// view = camera only. Zooming out shows the pasteboard; the export frame is always the 100% stage rectangle.
+var view = { zoom: 1, x: 0, y: 0, auto: true };
+var FRAME = { fixed: false, w: 1080, h: 1920 };
+const FW = () => FRAME.fixed ? FRAME.w : VW, FH = () => FRAME.fixed ? FRAME.h : VH;
+function fitFrameView() {   // fixed canvas: fit it in the window with a margin
+  if (FRAME.fixed) { view.zoom = Math.min(VW / FRAME.w, VH / FRAME.h) * 0.9; } else view.zoom = 1;
+  view.x = 0; view.y = 0; view.auto = true; applyView();
+}
+var frameGroup = null;
+function applyView() {
+  const z = view.zoom;
+  camera.left = view.x - VW / 2 / z; camera.right = view.x + VW / 2 / z;
+  camera.top = view.y + VH / 2 / z; camera.bottom = view.y - VH / 2 / z;
+  camera.updateProjectionMatrix();
+  const rb = document.getElementById('refbg');
+  if (rb) {
+    const fw = FW(), fh = FH();
+    rb.style.left = (VW - fw) / 2 + 'px'; rb.style.top = (VH - fh) / 2 + 'px';
+    rb.style.width = fw + 'px'; rb.style.height = fh + 'px';
+    rb.style.transform = `translate(${-view.x * z}px, ${view.y * z}px) scale(${z})`;
+  }
+  const zp = document.getElementById('zPct');
+  if (zp) zp.textContent = Math.round(z * 100) + '%';
+  if (frameGroup) layoutFrame();
+}
+function setZoom(z, sx = VW / 2, sy = VH / 2) {   // sx/sy: screen point that stays put
+  z = Math.min(8, Math.max(0.1, z));
+  const wx = view.x + (sx - VW / 2) / view.zoom, wy = view.y + (VH / 2 - sy) / view.zoom;
+  view.zoom = z; view.x = wx - (sx - VW / 2) / z; view.y = wy - (VH / 2 - sy) / z; view.auto = false;
+  applyView();
+}
+function resetView() { view.zoom = 1; view.x = 0; view.y = 0; view.auto = false; applyView(); }
+new ResizeObserver(resize).observe(stage);
+resize();
+
+/* ------------------------------------------------------------------ state */
+const S = {
+  tool: 'move', space: false,
+  gravity: 500,      // px/s² pulling the jiggle masses down
+  stretch: 0.7,      // max mass travel, as a fraction of the pin radius
+  air: 0.12,         // 0 = only acceleration jiggles, 1 = drags behind like it's in water
+  detail: 90,        // mesh cells along the long side
+  throwMode: 'glide',
+  showPins: true, showWeights: false, showMesh: false,
+  newPin: { rFrac: 0.16, freq: 2.2, bounce: 0.75, anchorFrac: 0.12 },
+};
+
+const img = { x: 0, y: 0, rot: 0, scale: 1, vx: 0, vy: 0 };
+let prevT = { x: 0, y: 0, rot: 0, scale: 1 };
+let W = 1, H = 1;          // image size in local units (= source pixels)
+let srcImage = null;       // HTMLImageElement or canvas
+let texture = null;
+
+const group = new THREE.Group();
+scene.add(group);
+const pinLayer = new THREE.Group();
+group.add(pinLayer);
+
+/* ------------------------------------------------------------------ mesh */
+const material = new THREE.ShaderMaterial({
+  transparent: true, depthTest: false, depthWrite: false, premultipliedAlpha: true,
+  uniforms: { map: { value: null }, uShowW: { value: 0 } },
+  vertexShader: `
+    attribute float aW; attribute float aA;
+    varying vec2 vUv; varying float vW; varying float vA;
+    void main(){ vUv = uv; vW = aW; vA = aA;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D map; uniform float uShowW;
+    varying vec2 vUv; varying float vW; varying float vA;
+    void main(){
+      vec4 c = texture2D(map, vUv);   // premultiplied
+      if (uShowW > 0.0) {
+        float a = c.a;
+        vec3 base = (a > 0.001 ? c.rgb / a : vec3(0.0)) * mix(1.0, 0.45, uShowW);
+        base = mix(base, vec3(1.0, 0.31, 0.64), vW * 0.8 * uShowW);
+        base = mix(base, vec3(1.0, 0.82, 0.25), vA * 0.65 * uShowW);
+        a = max(a, 0.35 * uShowW * max(vW, vA));
+        c = vec4(base * a, a);
+      }
+      if (c.a < 0.004) discard;
+      gl_FragColor = c;
+    }`,
+});
+const wireMat = new THREE.MeshBasicMaterial({ color: 0x9fd4ff, wireframe: true, transparent: true, opacity: 0.22, depthTest: false });
+let geometry = null, mesh = null, wire = null;
+let rest = null;           // Float32Array x,y per vertex
+let vertCount = 0;
+
+function buildMesh() {
+  if (mesh) { group.remove(mesh); group.remove(wire); geometry.dispose(); }
+  // alpha map at low res so we can skip fully transparent cells
+  const aMax = 320, as = Math.min(1, aMax / Math.max(W, H));
+  const aw = Math.max(1, Math.round(W * as)), ah = Math.max(1, Math.round(H * as));
+  const ac = document.createElement('canvas'); ac.width = aw; ac.height = ah;
+  const actx = ac.getContext('2d', { willReadFrequently: true });
+  actx.drawImage(srcImage, 0, 0, aw, ah);
+  const alpha = actx.getImageData(0, 0, aw, ah).data;
+
+  const cell = Math.max(W, H) / S.detail;
+  const nx = Math.max(1, Math.round(W / cell)), ny = Math.max(1, Math.round(H / cell));
+  const keep = new Uint8Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const x0 = Math.max(0, Math.floor(i / nx * aw) - 1), x1 = Math.min(aw - 1, Math.ceil((i + 1) / nx * aw) + 1);
+    const y0 = Math.max(0, Math.floor(j / ny * ah) - 1), y1 = Math.min(ah - 1, Math.ceil((j + 1) / ny * ah) + 1);
+    let hit = 0;
+    for (let y = y0; y <= y1 && !hit; y++) for (let x = x0; x <= x1; x++) if (alpha[(y * aw + x) * 4 + 3] > 6) { hit = 1; break; }
+    keep[j * nx + i] = hit;
+  }
+  const vid = new Int32Array((nx + 1) * (ny + 1)).fill(-1);
+  const pos = [], uvs = [], idx = [];
+  const V = (i, j) => {
+    const k = j * (nx + 1) + i;
+    if (vid[k] < 0) {
+      vid[k] = pos.length / 3;
+      pos.push(-W / 2 + i / nx * W, H / 2 - j / ny * H, 0);
+      uvs.push(i / nx, 1 - j / ny);
+    }
+    return vid[k];
+  };
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    if (!keep[j * nx + i]) continue;
+    const a = V(i, j), b = V(i + 1, j), c = V(i, j + 1), d = V(i + 1, j + 1);
+    if ((i + j) & 1) idx.push(a, c, b, b, c, d); else idx.push(a, c, d, a, d, b);
+  }
+  vertCount = pos.length / 3;
+  rest = new Float32Array(vertCount * 2);
+  for (let v = 0; v < vertCount; v++) { rest[v * 2] = pos[v * 3]; rest[v * 2 + 1] = pos[v * 3 + 1]; }
+  geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute('aW', new THREE.Float32BufferAttribute(new Float32Array(vertCount), 1));
+  geometry.setAttribute('aA', new THREE.Float32BufferAttribute(new Float32Array(vertCount), 1));
+  geometry.setIndex(idx);
+  mesh = new THREE.Mesh(geometry, material); mesh.renderOrder = 1; mesh.frustumCulled = false;
+  wire = new THREE.Mesh(geometry, wireMat); wire.renderOrder = 2; wire.frustumCulled = false;
+  wire.visible = S.showMesh;
+  group.add(mesh); group.add(wire);
+  computeWeights();
+}
+
+/* ------------------------------------------------------------------ pins */
+let pins = [];
+let selected = null;
+let weights = new Float32Array(0);   // vertCount * jigglePins.length
+let jig = [];                        // jiggle pins in weight order
+let pinSeq = 1;
+
+const circleGeo = (() => {
+  const g = new THREE.BufferGeometry(), p = [];
+  for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2; p.push(Math.cos(a), Math.sin(a), 0); }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); return g;
+})();
+const dotGeo = new THREE.CircleGeometry(1, 28);
+const COL = { jiggle: 0xff4fa3, anchor: 0xffd23f, sel: 0xffffff };
+
+function makePinVis(p) {
+  const color = COL[p.type];
+  const g = new THREE.Group();
+  const ringMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6, depthTest: false });
+  const ring = new THREE.LineLoop(circleGeo, ringMat);
+  const ring2 = new THREE.LineLoop(circleGeo, ringMat); // double line so the ring reads on busy images
+  const dotMat = new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true });
+  const dot = new THREE.Mesh(dotGeo, dotMat);
+  const dotEdge = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0x0d0e12, depthTest: false, transparent: true }));
+  const restMk = new THREE.LineLoop(circleGeo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7, depthTest: false }));
+  const linkGeo = new THREE.BufferGeometry();
+  linkGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+  const link = new THREE.Line(linkGeo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8, depthTest: false }));
+  const boxGeo = new THREE.BufferGeometry();
+  boxGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(15), 3));
+  const box = new THREE.Line(boxGeo, new THREE.LineBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.9, depthTest: false }));
+  [ring, ring2, box, restMk, link, dotEdge, dot].forEach((o, i) => { o.renderOrder = 10 + i; o.frustumCulled = false; g.add(o); });
+  pinLayer.add(g);
+  p.vis = { g, ring, ring2, box, dot, dotEdge, restMk, link, ringMat, dotMat };
+}
+
+function addPin(type, x, y, opts = {}) {
+  const m = Math.max(W, H);
+  const p = {
+    id: pinSeq++, type, x, y,
+    r: opts.r ?? (type === 'anchor' ? S.newPin.anchorFrac : S.newPin.rFrac) * m,
+    freq: opts.freq ?? S.newPin.freq,
+    bounce: opts.bounce ?? S.newPin.bounce,
+    limL: opts.limL ?? 1, limR: opts.limR ?? 1, limU: opts.limU ?? 1, limD: opts.limD ?? 1,
+    px: 0, py: 0, vx: 0, vy: 0, dlx: 0, dly: 0, tx: 0, ty: 0,
+  };
+  makePinVis(p);
+  pins.push(p);
+  resetPinPhysics(p);
+  computeWeights();
+  return p;
+}
+function removePin(p) {
+  if (REC.on || busy) return;
+  pins = pins.filter(q => q !== p);
+  pinLayer.remove(p.vis.g);
+  if (selected === p) select(null);
+  computeWeights();
+}
+function clearPins() {
+  if (REC.on) return;
+  [...pins].forEach(p => pinLayer.remove(p.vis.g)); pins = []; select(null); computeWeights(); }
+
+function resetPinPhysics(p) {
+  const [tx, ty] = toWorld(img, p.x, p.y);
+  p.px = tx; p.py = ty; p.vx = p.vy = 0; p.dlx = p.dly = 0; p.tx = tx; p.ty = ty;
+}
+
+const smooth = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+function computeWeights() {
+  if (!geometry) return;
+  jig = pins.filter(p => p.type === 'jiggle');
+  const anchors = pins.filter(p => p.type === 'anchor');
+  const J = jig.length;
+  weights = new Float32Array(vertCount * Math.max(1, J));
+  const aW = geometry.attributes.aW.array, aA = geometry.attributes.aA.array;
+  const tmp = new Float32Array(J);
+  for (let v = 0; v < vertCount; v++) {
+    const x = rest[v * 2], y = rest[v * 2 + 1];
+    let sum = 0;
+    for (let j = 0; j < J; j++) {
+      const p = jig[j], d = Math.hypot(x - p.x, y - p.y);
+      const w = smooth(1 - d / p.r); tmp[j] = w; sum += w;
+    }
+    let a = 0;
+    for (const q of anchors) a = Math.max(a, smooth(1 - Math.hypot(x - q.x, y - q.y) / q.r));
+    const m = (1 - a) / Math.max(1, sum);
+    for (let j = 0; j < J; j++) weights[v * J + j] = tmp[j] * m;
+    aW[v] = Math.min(1, sum) * (1 - a); aA[v] = a;
+  }
+  geometry.attributes.aW.needsUpdate = true;
+  geometry.attributes.aA.needsUpdate = true;
+}
+
+/* ------------------------------------------------------------------ transforms */
+function toWorld(T, x, y) {
+  const c = Math.cos(T.rot), s = Math.sin(T.rot);
+  return [T.x + T.scale * (c * x - s * y), T.y + T.scale * (s * x + c * y)];
+}
+function toLocal(T, wx, wy) {
+  const dx = (wx - T.x) / T.scale, dy = (wy - T.y) / T.scale, c = Math.cos(T.rot), s = Math.sin(T.rot);
+  return [c * dx + s * dy, -s * dx + c * dy];
+}
+const lerp = (a, b, t) => a + (b - a) * t;
+const snapT = () => ({ x: img.x, y: img.y, rot: img.rot, scale: img.scale });
+
+/* ------------------------------------------------------------------ physics */
+let grab = null; // {pin, x, y, px, py} world pointer for pulling a mass directly
+
+function simulate(dt) {
+  if (!jig.length || dt <= 0) return;
+  const n = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / n;
+  for (const p of jig) { const t = toWorld(prevT, p.x, p.y); p.tx = t[0]; p.ty = t[1]; }
+  const T = { x: 0, y: 0, rot: 0, scale: 1 };
+  for (let k = 1; k <= n; k++) {
+    const a = k / n;
+    T.x = lerp(prevT.x, img.x, a); T.y = lerp(prevT.y, img.y, a);
+    T.rot = lerp(prevT.rot, img.rot, a); T.scale = lerp(prevT.scale, img.scale, a);
+    for (const p of jig) {
+      const [tx, ty] = toWorld(T, p.x, p.y);
+      const tvx = (tx - p.tx) / h, tvy = (ty - p.ty) / h;
+      p.tx = tx; p.ty = ty;
+      if (grab && grab.pin === p) {
+        const gx = lerp(grab.px, grab.x, a), gy = lerp(grab.py, grab.y, a);
+        p.vx = (gx - p.px) / h; p.vy = (gy - p.py) / h; p.px = gx; p.py = gy;
+      } else {
+        const w = 2 * Math.PI * p.freq, K = w * w;
+        const zeta = lerp(0.95, 0.025, p.bounce);
+        const C = 2 * zeta * w, air = 1 - S.air;
+        const ax = K * (tx - p.px) + C * (tvx * air - p.vx);
+        const ay = K * (ty - p.py) + C * (tvy * air - p.vy) - S.gravity;
+        p.vx += ax * h; p.vy += ay * h;
+        p.px += p.vx * h; p.py += p.vy * h;
+      }
+      // soft leash so it can never fly apart
+      const L = S.stretch * p.r * T.scale * (grab && grab.pin === p ? 1.4 : 1);
+      const dx = p.px - tx, dy = p.py - ty, len = Math.hypot(dx, dy);
+      if (len > L && len > 1e-6) {
+        const nx = dx / len, ny = dy / len;
+        p.px = tx + nx * L; p.py = ty + ny * L;
+        const rv = (p.vx - tvx) * nx + (p.vy - tvy) * ny;
+        if (rv > 0) { p.vx -= nx * rv * 1.3; p.vy -= ny * rv * 1.3; }
+      }
+      // per-pin travel limits: left / right / up / down as a fraction of the reach
+      if (p.limL < 1 || p.limR < 1 || p.limU < 1 || p.limD < 1) {
+        const c = Math.cos(T.rot), sn = Math.sin(T.rot), R = S.stretch * p.r * T.scale;
+        const ex = p.px - tx, ey = p.py - ty;
+        let ax = c * ex + sn * ey, ay = -sn * ex + c * ey, hx = 0, hy = 0;
+        if (ax < -R * p.limL) { ax = -R * p.limL; hx = -1; } else if (ax > R * p.limR) { ax = R * p.limR; hx = 1; }
+        if (ay < -R * p.limD) { ay = -R * p.limD; hy = -1; } else if (ay > R * p.limU) { ay = R * p.limU; hy = 1; }
+        if (hx || hy) {
+          p.px = tx + c * ax - sn * ay; p.py = ty + sn * ax + c * ay;
+          const rx = p.vx - tvx, ry = p.vy - tvy;
+          let vx = c * rx + sn * ry, vy = -sn * rx + c * ry;
+          if (hx && vx * hx > 0) vx = -vx * 0.35;   // soft bounce off the limit
+          if (hy && vy * hy > 0) vy = -vy * 0.35;
+          p.vx = tvx + c * vx - sn * vy; p.vy = tvy + sn * vx + c * vy;
+        }
+      }
+    }
+  }
+  if (grab) { grab.px = grab.x; grab.py = grab.y; }
+  const c = Math.cos(-img.rot), s = Math.sin(-img.rot);
+  for (const p of jig) {
+    const dx = (p.px - p.tx) / img.scale, dy = (p.py - p.ty) / img.scale;
+    p.dlx = c * dx - s * dy; p.dly = s * dx + c * dy;
+  }
+}
+
+function deform() {
+  if (!geometry) return;
+  const P = geometry.attributes.position.array, J = jig.length;
+  if (!J) {
+    for (let v = 0; v < vertCount; v++) { P[v * 3] = rest[v * 2]; P[v * 3 + 1] = rest[v * 2 + 1]; }
+  } else {
+    for (let v = 0; v < vertCount; v++) {
+      let ox = 0, oy = 0; const base = v * J;
+      for (let j = 0; j < J; j++) { const w = weights[base + j]; if (w) { ox += w * jig[j].dlx; oy += w * jig[j].dly; } }
+      P[v * 3] = rest[v * 2] + ox; P[v * 3 + 1] = rest[v * 2 + 1] + oy;
+    }
+  }
+  geometry.attributes.position.needsUpdate = true;
+}
+
+function moveImage(dt) {
+  if (drag && (drag.mode === 'image' || drag.mode === 'rotate')) return;
+  if (S.throwMode === 'stop') { img.vx = img.vy = 0; return; }
+  const drop = S.throwMode === 'drop';
+  if (drop) img.vy -= 2600 * dt;
+  if (!drop && Math.abs(img.vx) + Math.abs(img.vy) < 2) { img.vx = img.vy = 0; return; }
+  img.x += img.vx * dt; img.y += img.vy * dt;
+  img.vx *= Math.exp(-(drop ? 0.4 : 1.6) * dt);
+  if (!drop) img.vy *= Math.exp(-1.6 * dt);
+  const c = Math.abs(Math.cos(img.rot)), s = Math.abs(Math.sin(img.rot));
+  const ex = img.scale * (c * W / 2 + s * H / 2), ey = img.scale * (s * W / 2 + c * H / 2);
+  const rest = 0.55;
+  const fw = FW(), fh = FH();
+  if (ex < fw / 2) {
+    if (img.x + ex > fw / 2) { img.x = fw / 2 - ex; img.vx = -Math.abs(img.vx) * rest; }
+    if (img.x - ex < -fw / 2) { img.x = -fw / 2 + ex; img.vx = Math.abs(img.vx) * rest; }
+  }
+  if (ey < fh / 2) {
+    if (img.y + ey > fh / 2) { img.y = fh / 2 - ey; img.vy = -Math.abs(img.vy) * rest; }
+    if (img.y - ey < -fh / 2) {
+      img.y = -fh / 2 + ey;
+      img.vy = Math.abs(img.vy) * (drop ? 0.42 : rest);
+      if (drop) { if (img.vy < 60) img.vy = 0; img.vx *= Math.exp(-6 * dt); }
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ pin visuals */
+function updatePinVisuals() {
+  pinLayer.visible = S.showPins;
+  if (!S.showPins) return;
+  const px = 1 / (img.scale * view.zoom), editing = isPinTool();
+  for (const p of pins) {
+    const v = p.vis, sel = p === selected;
+    const col = sel ? COL.sel : COL[p.type];
+    v.ringMat.color.setHex(col); v.dotMat.color.setHex(col);
+    v.ringMat.opacity = sel ? 0.95 : editing ? 0.55 : 0.18;
+    v.ring.position.set(p.x, p.y, 0); v.ring.scale.setScalar(p.r);
+    v.ring2.position.set(p.x, p.y, 0); v.ring2.scale.setScalar(p.r + px);
+    const mx = p.x + p.dlx, my = p.y + p.dly;
+    const dr = (sel ? 7 : 5.5) * px;
+    v.dot.position.set(mx, my, 0); v.dot.scale.setScalar(dr);
+    v.dotEdge.position.set(mx, my, 0); v.dotEdge.scale.setScalar(dr + 2 * px);
+    v.restMk.position.set(p.x, p.y, 0); v.restMk.scale.setScalar(3.5 * px);
+    const moved = Math.hypot(p.dlx, p.dly) * img.scale > 3;
+    v.restMk.visible = v.link.visible = moved;
+    const limited = p.type === 'jiggle' && (p.limL < 1 || p.limR < 1 || p.limU < 1 || p.limD < 1);
+    v.box.visible = sel && p.type === 'jiggle' && (limited || limitsTouched);
+    if (v.box.visible) {
+      const R = S.stretch * p.r, x0 = p.x - R * p.limL, x1 = p.x + R * p.limR, y0 = p.y - R * p.limD, y1 = p.y + R * p.limU;
+      v.box.geometry.attributes.position.array.set([x0, y0, 0, x1, y0, 0, x1, y1, 0, x0, y1, 0, x0, y0, 0]);
+      v.box.geometry.attributes.position.needsUpdate = true;
+    }
+    if (moved) {
+      const a = v.link.geometry.attributes.position.array;
+      a[0] = p.x; a[1] = p.y; a[3] = mx; a[4] = my; v.link.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ input */
+const isPinTool = () => !S.space && (S.tool === 'jiggle' || S.tool === 'anchor');
+const effectiveTool = () => S.space ? 'move' : S.tool;
+let drag = null;
+let history = [];
+
+function worldFromEvent(e) {
+  const r = canvas.getBoundingClientRect();
+  return [view.x + (e.clientX - r.left - VW / 2) / view.zoom, view.y + (VH / 2 - (e.clientY - r.top)) / view.zoom];
+}
+function hitPin(wx, wy) {
+  if (!S.showPins) return null;
+  let best = null, bd = Infinity;
+  for (const p of pins) {
+    const [mx, my] = toWorld(img, p.x + p.dlx, p.y + p.dly);
+    const [rx, ry] = toWorld(img, p.x, p.y);
+    const d = Math.min(Math.hypot(wx - mx, wy - my), Math.hypot(wx - rx, wy - ry));
+    if (d < 13 / view.zoom && d < bd) { bd = d; best = { pin: p, part: 'dot' }; }
+  }
+  if (best || !isPinTool()) return best;
+  // only the selected pin's ring is a resize handle, so overlapping rings don't steal clicks
+  if (selected) {
+    const [rx, ry] = toWorld(img, selected.x, selected.y);
+    const d = Math.abs(Math.hypot(wx - rx, wy - ry) - selected.r * img.scale);
+    if (d < 8 / view.zoom) best = { pin: selected, part: 'ring' };
+  }
+  return best;
+}
+const insideImage = (lx, ly) => Math.abs(lx) <= W / 2 && Math.abs(ly) <= H / 2;
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('pointerdown', e => {
+  if (!srcImage) return;
+  const [wx, wy] = worldFromEvent(e), [lx, ly] = toLocal(img, wx, wy);
+  canvas.setPointerCapture(e.pointerId);
+  if (e.button === 1 || (busy && e.button === 0)) { e.preventDefault(); drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }; updateCursor(null); return; }
+  if (busy) return;
+  const hit = hitPin(wx, wy), tool = effectiveTool();
+
+  if (e.button === 2) { if (hit) removePin(hit.pin); return; }
+
+  if (isPinTool()) {
+    if (hit && hit.part === 'ring') { select(hit.pin); drag = { mode: 'radius', pin: hit.pin }; }
+    else if (hit) { select(hit.pin); drag = { mode: 'pin', pin: hit.pin, ox: hit.pin.x - lx, oy: hit.pin.y - ly }; }
+    else if (insideImage(lx, ly)) { const p = addPin(tool, lx, ly); select(p); drag = { mode: 'pin', pin: p, ox: 0, oy: 0 }; }
+    else select(null);
+  } else {
+    if (hit && hit.pin.type === 'jiggle' && !e.shiftKey) {
+      select(hit.pin);
+      grab = { pin: hit.pin, x: wx, y: wy, px: hit.pin.px, py: hit.pin.py };
+      drag = { mode: 'grab' };
+    } else if (e.shiftKey) {
+      drag = { mode: 'rotate', a0: Math.atan2(wy - img.y, wx - img.x), r0: img.rot };
+      img.vx = img.vy = 0;
+    } else if (!hit && !insideImage(lx, ly)) {
+      drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y };
+    } else {
+      drag = { mode: 'image', ox: img.x - wx, oy: img.y - wy };
+      img.vx = img.vy = 0; history = [{ t: performance.now(), x: img.x, y: img.y }];
+    }
+  }
+  updateCursor(hit);
+});
+canvas.addEventListener('pointermove', e => {
+  const [wx, wy] = worldFromEvent(e);
+  if (!drag) { const [hx, hy] = toLocal(img, wx, wy); hoverEmpty = !insideImage(hx, hy); updateCursor(srcImage ? hitPin(wx, wy) : null); return; }
+  if (drag.mode === 'pan') {
+    view.x = drag.vx - (e.clientX - drag.sx) / view.zoom; view.y = drag.vy + (e.clientY - drag.sy) / view.zoom;
+    view.auto = false; applyView(); return;
+  }
+  const [lx, ly] = toLocal(img, wx, wy);
+  if (drag.mode === 'image') {
+    img.x = wx + drag.ox; img.y = wy + drag.oy;
+    const t = performance.now(); history.push({ t, x: img.x, y: img.y });
+    while (history.length > 2 && t - history[0].t > 90) history.shift();
+  } else if (drag.mode === 'rotate') {
+    img.rot = drag.r0 + Math.atan2(wy - img.y, wx - img.x) - drag.a0;
+  } else if (drag.mode === 'grab') {
+    grab.x = wx; grab.y = wy;
+  } else if (drag.mode === 'pin') {
+    drag.pin.x = lx + drag.ox; drag.pin.y = ly + drag.oy; resetPinPhysics(drag.pin); computeWeights();
+  } else if (drag.mode === 'radius') {
+    drag.pin.r = Math.max(4, Math.hypot(lx - drag.pin.x, ly - drag.pin.y)); computeWeights(); syncPinUI();
+  }
+});
+function endDrag(e) {
+  if (!drag) return;
+  if (drag.mode === 'image' && S.throwMode !== 'stop' && history.length > 1) {
+    const a = history[0], b = history[history.length - 1], dt = (performance.now() - a.t) / 1000;
+    if (dt > 0 && performance.now() - b.t < 60) { img.vx = (b.x - a.x) / dt; img.vy = (b.y - a.y) / dt; }
+    const sp = Math.hypot(img.vx, img.vy), max = 4000;
+    if (sp > max) { img.vx *= max / sp; img.vy *= max / sp; }
+  }
+  if (drag.mode === 'pin' || drag.mode === 'radius') rememberDefaults(drag.pin);
+  grab = null; drag = null;
+  if (e) updateCursor(hitPin(...worldFromEvent(e)));
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (!srcImage) return;
+  const [wx, wy] = worldFromEvent(e), [lx, ly] = toLocal(img, wx, wy);
+  const f = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015));   // ctrlKey = trackpad pinch
+  if (busy || !e.altKey) {
+    if (!busy && isPinTool() && S.showPins) {
+      const under = pins.filter(p => Math.hypot(lx - p.x, ly - p.y) < p.r).sort((a, b) => a.r - b.r)[0];
+      if (under) { under.r = Math.max(4, under.r * f); select(under); computeWeights(); syncPinUI(); rememberDefaults(under); return; }
+    }
+    const r = canvas.getBoundingClientRect();
+    setZoom(view.zoom * f, e.clientX - r.left, e.clientY - r.top);
+    return;
+  }
+  const ns = Math.min(20, Math.max(0.03, img.scale * f)), k = ns / img.scale;
+  img.x = wx + (img.x - wx) * k; img.y = wy + (img.y - wy) * k; img.scale = ns;
+}, { passive: false });
+
+let hoverEmpty = false;
+function updateCursor(hit) {
+  if (drag) { canvas.style.cursor = drag.mode === 'image' || drag.mode === 'grab' || drag.mode === 'pan' ? 'grabbing' : drag.mode === 'radius' ? 'nwse-resize' : drag.mode === 'rotate' ? 'alias' : 'move'; return; }
+  if (!hit && hoverEmpty && !isPinTool()) { canvas.style.cursor = 'default'; return; }
+  if (hit) { canvas.style.cursor = hit.part === 'ring' ? 'nwse-resize' : isPinTool() ? 'move' : hit.pin.type === 'jiggle' ? 'grab' : 'default'; return; }
+  canvas.style.cursor = isPinTool() ? 'crosshair' : 'grab';
+}
+
+/* ------------------------------------------------------------------ keyboard */
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
+  const k = e.key.toLowerCase();
+  if (e.metaKey || e.ctrlKey) return;
+  if (k === 'enter') { e.preventDefault(); if (player) player.stop = true; else if (!busy) REC.on ? stopRec() : startRec(); return; }
+  if (busy) return;
+  if (k === ' ') { if (!S.space) { S.space = true; refreshTool(); } e.preventDefault(); }
+  else if (k === 'v') setTool('move');
+  else if (k === 'p') setTool('jiggle');
+  else if (k === 'a') setTool('anchor');
+  else if (k === 'j') jolt();
+  else if (k === 'r') recenter();
+  else if (k === 'h') { S.showPins = !S.showPins; document.getElementById('tPins').checked = S.showPins; }
+  else if (k === 'escape') select(null);
+  else if (k === '-' || k === '_') setZoom(view.zoom / 1.25);
+  else if (k === '=' || k === '+') setZoom(view.zoom * 1.25);
+  else if (k === '0') resetView();
+  else if (k === 'f') fitView();
+  else if ((k === 'delete' || k === 'backspace') && selected) { removePin(selected); e.preventDefault(); }
+});
+addEventListener('keyup', e => { if (e.key === ' ') { S.space = false; refreshTool(); } });
+addEventListener('blur', () => { S.space = false; refreshTool(); });
+
+/* ------------------------------------------------------------------ UI */
+const $ = id => document.getElementById(id);
+function slider(parent, { label, min, max, step, value, fmt, onInput }) {
+  const el = document.createElement('div'); el.className = 'slider';
+  el.innerHTML = `<div class="lab"><span>${label}</span><span></span></div><input type="range" min="${min}" max="${max}" step="${step}">`;
+  const input = el.querySelector('input'), out = el.querySelector('.lab span:last-child');
+  const show = v => out.textContent = fmt ? fmt(+v) : v;
+  input.value = value; show(value);
+  input.addEventListener('input', () => { show(input.value); onInput(+input.value); });
+  parent.appendChild(el);
+  return { set(v) { input.value = v; show(v); }, el };
+}
+
+const physBox = $('physSliders');
+slider(physBox, { label: 'Gravity (droop)', min: 0, max: 3000, step: 10, value: S.gravity, fmt: v => v.toFixed(0), onInput: v => S.gravity = v });
+slider(physBox, { label: 'Stretch limit', min: 0.1, max: 2, step: 0.01, value: S.stretch, fmt: v => Math.round(v * 100) + '%', onInput: v => S.stretch = v });
+slider(physBox, { label: 'Drag lag', min: 0, max: 1, step: 0.01, value: S.air, fmt: v => Math.round(v * 100) + '%', onInput: v => S.air = v });
+
+const viewBox = $('viewSliders');
+let detailTimer = 0;
+slider(viewBox, { label: 'Mesh detail', min: 20, max: 160, step: 1, value: S.detail, onInput: v => {
+  S.detail = v; clearTimeout(detailTimer); detailTimer = setTimeout(() => srcImage && buildMesh(), 80);
+} });
+
+const pinBox = $('pinSliders');
+const pinUI = {
+  r: slider(pinBox, { label: 'Radius', min: 4, max: 1000, step: 1, value: 100, fmt: v => v.toFixed(0) + ' px', onInput: v => { if (selected) { selected.r = v; computeWeights(); rememberDefaults(selected); } } }),
+  freq: slider(pinBox, { label: 'Wobble speed', min: 0.3, max: 8, step: 0.05, value: 2, fmt: v => v.toFixed(2) + ' Hz', onInput: v => { if (selected) { selected.freq = v; rememberDefaults(selected); } } }),
+  bounce: slider(pinBox, { label: 'Bounciness', min: 0, max: 1, step: 0.01, value: 0.75, fmt: v => Math.round(v * 100) + '%', onInput: v => { if (selected) { selected.bounce = v; rememberDefaults(selected); } } }),
+};
+const limHead = document.createElement('div');
+limHead.className = 'limhead';
+limHead.innerHTML = '<span>Travel limits</span><button type="button" id="limReset">Reset</button>';
+pinBox.appendChild(limHead);
+const limFmt = v => v >= 1 ? 'free' : Math.round(v * 100) + '%';
+const limSlider = (label, key) => slider(pinBox, { label, min: 0, max: 1, step: 0.01, value: 1, fmt: limFmt,
+  onInput: v => { if (selected) { selected[key] = v; limitsTouched = true; } } });
+let limitsTouched = false;
+Object.assign(pinUI, { limL: limSlider('← Left', 'limL'), limR: limSlider('Right →', 'limR'), limU: limSlider('↑ Up', 'limU'), limD: limSlider('↓ Down', 'limD') });
+$('limReset').onclick = () => { if (selected) { selected.limL = selected.limR = selected.limU = selected.limD = 1; syncPinUI(); } };
+function rememberDefaults(p) {
+  const m = Math.max(W, H);
+  if (p.type === 'anchor') S.newPin.anchorFrac = p.r / m;
+  else { S.newPin.rFrac = p.r / m; S.newPin.freq = p.freq; S.newPin.bounce = p.bounce; }
+}
+function select(p) { selected = p; syncPinUI(); }
+function syncPinUI() {
+  $('pinEmpty').hidden = !!selected; $('pinCard').hidden = !selected;
+  if (!selected) return;
+  const anchor = selected.type === 'anchor';
+  $('pinName').textContent = anchor ? 'Anchor pin' : 'Jiggle pin';
+  $('pinDot').style.background = anchor ? 'var(--yellow)' : 'var(--pink)';
+  const inp = pinUI.r.el.querySelector('input'); inp.max = Math.round(Math.max(W, H) * 0.8);
+  pinUI.r.set(Math.round(selected.r));
+  pinUI.freq.el.hidden = pinUI.bounce.el.hidden = anchor;
+  limHead.hidden = anchor;
+  for (const k of ['limL', 'limR', 'limU', 'limD']) { pinUI[k].el.hidden = anchor; if (!anchor) pinUI[k].set(selected[k] ?? 1); }
+  limitsTouched = false;
+  if (!anchor) { pinUI.freq.set(selected.freq); pinUI.bounce.set(selected.bounce); }
+}
+$('delPin').onclick = () => selected && removePin(selected);
+
+function setTool(t) { if (REC.on && t !== 'move') return; S.tool = t; refreshTool(); }
+function refreshTool() {
+  document.querySelectorAll('.tool').forEach(b => b.classList.toggle('active', b.dataset.tool === effectiveTool()));
+  updateCursor(null); updateHint();
+}
+document.querySelectorAll('.tool').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+function updateHint() {
+  const t = effectiveTool(), h = $('hint');
+  h.hidden = !srcImage;
+  if (REC.on) { h.innerHTML = '<b style="color:#ff8080">● Recording</b> · drag, throw, poke, jolt · <b>Enter</b> stops'; return; }
+  if (!srcImage) h.innerHTML = '';
+  else if (t === 'jiggle') h.innerHTML = '<b>Click</b> the squishy parts to add jiggle pins · drag the selected ring\'s edge or scroll to resize';
+  else if (t === 'anchor') h.innerHTML = '<b>Click</b> parts that should stay <b>rigid</b> · they cancel jiggle nearby';
+  else if (!pins.some(p => p.type === 'jiggle')) h.innerHTML = 'Press <b>P</b> and click the image to add jiggle pins';
+  else h.innerHTML = '<b>Drag</b> the image and let go · grab a pink dot to pull the jiggle · <b>shift</b> rotates';
+}
+
+$('throwSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+  S.throwMode = b.dataset.v;
+  $('throwSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  if (S.throwMode === 'drop') img.vy = Math.max(img.vy, 0);
+});
+$('tPins').onchange = e => { S.showPins = e.target.checked; };
+$('tWeights').onchange = e => { S.showWeights = e.target.checked; };
+$('tMesh').onchange = e => { S.showMesh = e.target.checked; if (wire) wire.visible = S.showMesh; };
+$('joltBtn').onclick = jolt;
+$('centerBtn').onclick = recenter;
+$('clearBtn').onclick = () => { clearPins(); updateHint(); };
+$('demoBtn').onclick = loadDemo;
+$('emptyCard').onclick = e => { if (e.target.id !== 'emptyDemo') $('file').click(); };
+$('emptyDemo').onclick = loadDemo;
+$('openBtn').onclick = () => $('file').click();
+$('file').onchange = e => { const f = e.target.files[0]; if (f) loadFile(f); e.target.value = ''; };
+
+function jolt() {
+  if (busy) return;
+  const s = img.scale, imp = [];
+  for (const p of jig) {
+    const a = Math.random() * Math.PI * 2, m = (500 + Math.random() * 500) * s * Math.min(3, p.r / 100);
+    const vx = Math.cos(a) * m, vy = Math.sin(a) * m;
+    p.vx += vx; p.vy += vy; imp.push([p.id, vx, vy]);
+  }
+  if (REC.on) REC.take.events.push({ t: (performance.now() - REC.t0) / 1000, imp });
+}
+function fitScale() { return Math.min(FW() * 0.72 / W, FH() * 0.78 / H); }
+function recenter() {
+  if (VW <= 40 || VH <= 40) { needsFit = true; return; }
+  img.x = 0; img.y = 0; img.rot = 0; img.vx = img.vy = 0; img.scale = fitScale();
+  prevT = snapT(); pins.forEach(resetPinPhysics);
+}
+
+/* ------------------------------------------------------------------ loading */
+function setImage(source) {
+  if (busy) return;
+  if (REC.on) stopRec();
+  REC.take = null;
+  srcImage = source;
+  $('empty').hidden = true; $('loadErr').hidden = true;
+  W = source.naturalWidth || source.width; H = source.naturalHeight || source.height;
+  if (texture) texture.dispose();
+  texture = source instanceof HTMLCanvasElement ? new THREE.CanvasTexture(source) : new THREE.Texture(source);
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.premultiplyAlpha = true;
+  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  texture.needsUpdate = true;
+  material.uniforms.map.value = texture;
+  clearPins();
+  recenter();
+  buildMesh();
+  updateHint(); refreshExportUI();
+}
+function loadError(msg) {
+  const e = $('loadErr'); e.textContent = msg; e.hidden = false;
+  if (srcImage) { $('hint').innerHTML = '<b style="color:#ff8080">' + msg + '</b>'; setTimeout(updateHint, 3500); }
+}
+function loadFile(file) {
+  if (!file || !(file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(file.name))) { loadError('That file isn\'t an image.'); return; }
+  const url = URL.createObjectURL(file), im = new Image();
+  im.onload = () => {
+    // cap huge photos so the alpha scan + texture stay snappy
+    const max = 2048, s = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+    if (s < 1) {
+      const c = document.createElement('canvas');
+      c.width = Math.round(im.naturalWidth * s); c.height = Math.round(im.naturalHeight * s);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); setImage(c);
+    } else setImage(im);
+    setTool('jiggle');
+    URL.revokeObjectURL(url);
+  };
+  im.onerror = () => { URL.revokeObjectURL(url); loadError("Couldn't read that image (HEIC isn't supported, try PNG/JPG)."); };
+  im.src = url;
+}
+let dragDepth = 0;
+addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; $('drop').classList.add('on'); });
+addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('drop').classList.remove('on'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; $('drop').classList.remove('on');
+  const fs = [...(e.dataTransfer?.files || [])]; if (fs.length) loadFile(fs.find(f => f.type.startsWith('image/')) || fs[0]);
+});
+addEventListener('paste', e => {
+  const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+  if (it) loadFile(it.getAsFile());
+});
+
+/* ------------------------------------------------------------------ demo: a pudding on a plate */
+function drawDemo() {
+  const c = document.createElement('canvas'); c.width = 640; c.height = 720;
+  const g = c.getContext('2d');
+  // plate
+  g.fillStyle = '#00000040'; g.beginPath(); g.ellipse(320, 662, 270, 40, 0, 0, Math.PI * 2); g.fill();
+  let gr = g.createLinearGradient(0, 600, 0, 690); gr.addColorStop(0, '#f6f8fc'); gr.addColorStop(1, '#b9c4d4');
+  g.fillStyle = gr; g.beginPath(); g.ellipse(320, 640, 272, 46, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#dfe6f0'; g.beginPath(); g.ellipse(320, 634, 210, 30, 0, 0, Math.PI * 2); g.fill();
+  // pudding body
+  const body = new Path2D();
+  body.moveTo(140, 628);
+  body.bezierCurveTo(200, 650, 440, 650, 500, 628);
+  body.bezierCurveTo(486, 520, 470, 380, 440, 292);
+  body.bezierCurveTo(400, 240, 240, 240, 200, 292);
+  body.bezierCurveTo(170, 380, 154, 520, 140, 628);
+  gr = g.createLinearGradient(140, 0, 500, 0);
+  gr.addColorStop(0, '#f2a52e'); gr.addColorStop(0.35, '#ffd66b'); gr.addColorStop(0.75, '#ffcb52'); gr.addColorStop(1, '#e48f22');
+  g.fillStyle = gr; g.fill(body);
+  g.save(); g.clip(body);
+  // caramel top with drips
+  gr = g.createLinearGradient(0, 240, 0, 380); gr.addColorStop(0, '#6e320f'); gr.addColorStop(1, '#a1531d');
+  g.fillStyle = gr; g.beginPath(); g.moveTo(120, 230); g.lineTo(520, 230); g.lineTo(520, 318);
+  const drips = [[470, 318], [452, 360], [432, 318], [400, 330], [382, 392], [362, 330], [330, 322], [300, 350], [272, 324], [244, 330], [226, 376], [206, 326], [170, 318]];
+  let lx = 520, ly = 318;
+  for (const [x, y] of drips) { g.quadraticCurveTo((lx + x) / 2, Math.max(ly, y) + (y > 340 ? 10 : 4), x, y); lx = x; ly = y; }
+  g.lineTo(120, 318); g.closePath(); g.fill();
+  // shading + shine
+  g.fillStyle = '#ffffff55'; g.beginPath(); g.ellipse(214, 440, 16, 92, 0.12, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ffffff99'; g.beginPath(); g.ellipse(222, 360, 7, 22, 0.15, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ffffff40'; g.beginPath(); g.ellipse(290, 268, 50, 9, -0.05, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#b3561033'; g.beginPath(); g.ellipse(320, 640, 200, 30, 0, 0, Math.PI * 2); g.fill();
+  g.restore();
+  // face
+  g.fillStyle = '#ff7a8a88';
+  g.beginPath(); g.ellipse(250, 505, 26, 15, 0, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(392, 505, 26, 15, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#2a1408';
+  for (const x of [272, 368]) {
+    g.beginPath(); g.ellipse(x, 470, 15, 21, 0, 0, Math.PI * 2); g.fill();
+  }
+  g.fillStyle = '#fff';
+  for (const x of [277, 373]) { g.beginPath(); g.arc(x, 462, 5.5, 0, Math.PI * 2); g.fill(); }
+  g.strokeStyle = '#2a1408'; g.lineWidth = 6; g.lineCap = 'round';
+  g.beginPath(); g.arc(320, 500, 18, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
+  // cherry
+  g.strokeStyle = '#4c7d2a'; g.lineWidth = 7;
+  g.beginPath(); g.moveTo(322, 228); g.bezierCurveTo(330, 180, 350, 150, 378, 128); g.stroke();
+  g.fillStyle = '#5d9a35'; g.beginPath(); g.ellipse(398, 132, 26, 11, -0.5, 0, Math.PI * 2); g.fill();
+  gr = g.createRadialGradient(306, 222, 4, 318, 236, 36); gr.addColorStop(0, '#ff6b7c'); gr.addColorStop(0.6, '#e0142f'); gr.addColorStop(1, '#8c0718');
+  g.fillStyle = gr; g.beginPath(); g.arc(318, 240, 32, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ffffffcc'; g.beginPath(); g.ellipse(305, 228, 8, 5, -0.6, 0, Math.PI * 2); g.fill();
+  return c;
+}
+function loadDemo() {
+  setImage(drawDemo());
+  const L = (x, y) => [x - W / 2, H / 2 - y];
+  addPin('jiggle', ...L(320, 430), { r: 250, freq: 2.1, bounce: 0.8 });
+  addPin('jiggle', ...L(330, 200), { r: 120, freq: 1.5, bounce: 0.88 });
+  addPin('anchor', ...L(320, 655), { r: 175 });
+  addPin('anchor', ...L(100, 640), { r: 110 });
+  addPin('anchor', ...L(540, 640), { r: 110 });
+  select(null); setTool('move');
+  S.newPin = { rFrac: 0.16, freq: 2.2, bounce: 0.75, anchorFrac: 0.12 };
+  updateHint();
+}
+
+/* ------------------------------------------------------------------ recording
+   A take is a log of the image transform + pointer grabs + jolts, plus a snapshot
+   of every pin. Exports re-simulate it at an exact frame rate, so no dropped frames
+   and any resolution. */
+var REC = { on: false, t0: 0, take: null, max: 120 };
+var busy = false, player = null, cancelExport = false;
+const EXP = { fps: 30 };
+
+function startRec() {
+  if (!srcImage || busy || REC.on) return;
+  setTool('move'); select(null);
+  REC.take = {
+    W, H, VW: FW(), VH: FH(), dur: 0, samples: [], events: [],
+    pins: pins.map(p => ({ id: p.id, type: p.type, x: p.x, y: p.y, r: p.r, freq: p.freq, bounce: p.bounce,
+      limL: p.limL, limR: p.limR, limU: p.limU, limD: p.limD,
+      px: p.px, py: p.py, vx: p.vx, vy: p.vy, dlx: p.dlx, dly: p.dly })),
+  };
+  REC.on = true; REC.t0 = performance.now();
+  recSample(REC.t0);
+  showBadge('rec'); refreshExportUI(); updateHint();
+}
+function recSample(now) {
+  const t = (now - REC.t0) / 1000;
+  REC.take.samples.push({ t, x: img.x, y: img.y, rot: img.rot, scale: img.scale,
+    g: grab ? { id: grab.pin.id, x: grab.x, y: grab.y } : null,
+    gravity: S.gravity, stretch: S.stretch, air: S.air });
+  $('badgeText').textContent = fmtTime(t);
+  if (t >= REC.max) stopRec();
+}
+function stopRec() {
+  if (!REC.on) return;
+  REC.on = false;
+  const s = REC.take.samples;
+  REC.take.dur = s[s.length - 1].t;
+  if (REC.take.dur < 0.1) REC.take = null;
+  hideBadge(); refreshExportUI(); updateHint();
+}
+const fmtTime = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+
+function sampleAt(take, t) {
+  const s = take.samples, n = s.length;
+  if (t <= s[0].t) return s[0];
+  if (t >= s[n - 1].t) return s[n - 1];
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (s[m].t <= t) lo = m; else hi = m; }
+  const a = s[lo], b = s[hi], k = (t - a.t) / Math.max(1e-6, b.t - a.t);
+  const o = { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), rot: lerp(a.rot, b.rot, k), scale: lerp(a.scale, b.scale, k),
+    gravity: a.gravity, stretch: a.stretch, air: a.air, g: a.g };
+  if (a.g && b.g && a.g.id === b.g.id) o.g = { id: a.g.id, x: lerp(a.g.x, b.g.x, k), y: lerp(a.g.y, b.g.y, k) };
+  return o;
+}
+
+// swap the live scene over to the take's pins/state; takeEnd puts everything back
+function takeBegin(take) {
+  const saved = { pins, selected, img: { ...img }, prevT: { ...prevT }, gravity: S.gravity, stretch: S.stretch, air: S.air };
+  busy = true; grab = null; drag = null;
+  pins = take.pins.map(q => ({ ...q, tx: 0, ty: 0 }));
+  computeWeights();
+  const s0 = take.samples[0];
+  Object.assign(img, { x: s0.x, y: s0.y, rot: s0.rot, scale: s0.scale, vx: 0, vy: 0 });
+  prevT = snapT();
+  pinLayer.visible = false; if (wire) wire.visible = false; frameGroup.visible = false;
+  material.uniforms.uShowW.value = 0;
+  return { saved, take, ev: 0 };
+}
+function takeStep(st, t, dt) {
+  const s = sampleAt(st.take, t);
+  img.x = s.x; img.y = s.y; img.rot = s.rot; img.scale = s.scale;
+  S.gravity = s.gravity; S.stretch = s.stretch; S.air = s.air;
+  const ev = st.take.events;
+  while (st.ev < ev.length && ev[st.ev].t <= t) {
+    for (const [id, vx, vy] of ev[st.ev].imp) { const p = pins.find(q => q.id === id); if (p) { p.vx += vx; p.vy += vy; } }
+    st.ev++;
+  }
+  if (s.g) {
+    const p = pins.find(q => q.id === s.g.id);
+    if (p) {
+      if (!grab || grab.pin !== p) grab = { pin: p, x: s.g.x, y: s.g.y, px: p.px, py: p.py };
+      else { grab.x = s.g.x; grab.y = s.g.y; }
+    }
+  } else grab = null;
+  if (dt > 0) simulate(dt);
+  deform();
+  group.position.set(img.x, img.y, 0); group.rotation.z = img.rot; group.scale.setScalar(img.scale);
+  prevT = snapT();
+}
+function takeEnd(st) {
+  const v = st.saved;
+  pins = v.pins; selected = v.selected; computeWeights();
+  Object.assign(img, v.img); prevT = v.prevT;
+  S.gravity = v.gravity; S.stretch = v.stretch; S.air = v.air;
+  grab = null; busy = false;
+  if (wire) wire.visible = S.showMesh;
+  frameGroup.visible = true;
+}
+
+function playTake() {
+  if (!REC.take || busy || REC.on) return;
+  const st = takeBegin(REC.take), fps = 60, dur = REC.take.dur, t0 = performance.now();
+  let i = 0;
+  player = { stop: false };
+  showBadge('play');
+  const tick = () => {
+    const t = (performance.now() - t0) / 1000;
+    while (!player.stop && i / fps <= Math.min(t, dur)) { takeStep(st, i / fps, i ? 1 / fps : 0); i++; }
+    $('badgeText').textContent = 'take ' + fmtTime(Math.min(t, dur));
+    if (player.stop || i / fps > dur) { takeEnd(st); player = null; hideBadge(); refreshExportUI(); return; }
+    requestAnimationFrame(tick);
+  };
+  tick(); refreshExportUI();
+}
+
+function showBadge(kind) {
+  const b = $('badge'); b.className = kind; b.hidden = false;
+  $('badgeText').textContent = kind === 'rec' ? '0:00.0' : 'take 0:00.0';
+}
+function hideBadge() { $('badge').hidden = true; }
+$('badgeStop').onclick = () => { if (player) player.stop = true; else stopRec(); };
+
+/* ------------------------------------------------------------------ export */
+function exportFrame(take, mode) {
+  if (mode !== 'fit') return { cx: 0, cy: 0, w: take.VW, h: take.VH };
+  let m = 0;
+  for (const p of take.pins) if (p.type === 'jiggle') m = Math.max(m, p.r);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const s of take.samples) {
+    const c = Math.abs(Math.cos(s.rot)), sn = Math.abs(Math.sin(s.rot));
+    const pad = s.scale * m * s.stretch * 1.4;
+    const ex = s.scale * (c * take.W / 2 + sn * take.H / 2) + pad, ey = s.scale * (sn * take.W / 2 + c * take.H / 2) + pad;
+    x0 = Math.min(x0, s.x - ex); x1 = Math.max(x1, s.x + ex); y0 = Math.min(y0, s.y - ey); y1 = Math.max(y1, s.y + ey);
+  }
+  return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0 + 8, h: y1 - y0 + 8 };
+}
+const even = v => Math.max(2, 2 * Math.round(v / 2));
+function exportSize(take, fr, key, fmt) {
+  const avg = take.samples.reduce((a, s) => a + s.scale, 0) / take.samples.length;
+  const m = key === 'native' ? 1 / avg : +key;
+  let w = fr.w * m, h = fr.h * m;
+  let k = Math.min(1, 4096 / Math.max(w, h));
+  if (fmt === 'mp4' || fmt === 'webm') k = Math.min(k, Math.sqrt(36864 * 256 / (w * h)));   // H.264 level 5.2 frame limit
+  return [even(w * k), even(h * k)];
+}
+function refreshExportUI() {
+  const take = REC.take, fmt = $('fmt').value;
+  $('recBtn').classList.toggle('on', REC.on);
+  $('recBtn').querySelector('span').textContent = REC.on ? 'Stop' : 'Record';
+  $('recBtn').disabled = !srcImage || !!player;
+  $('canvasSel').disabled = REC.on || !!player;
+  $('playBtn').disabled = !take || REC.on || !!player;
+  $('exportBtn').disabled = !take || REC.on || !!player;
+  $('takeInfo').innerHTML = REC.on ? 'Recording… move, throw &amp; poke it. Hit <b>Stop</b> (or Enter) when done.'
+    : take ? `Take ready: <b style="color:var(--text)">${take.dur.toFixed(1)} s</b> · ${Math.floor(take.dur * EXP.fps) + 1} frames at ${EXP.fps} fps`
+    : 'Hit <b>Record</b>, then drag, throw &amp; poke the image. Stop when done. Pins are hidden in the export.';
+  $('bgField').hidden = fmt !== 'mp4';
+  const folderOK = typeof window.showDirectoryPicker === 'function';
+  $('fmt').querySelector('[value=folder]').disabled = !folderOK;
+  $('exportNote').textContent = {
+    zip: 'Unzip and import as a PNG sequence in After Effects, Premiere, Resolve or Blender.',
+    folder: 'Pick a folder; the frames go in a new subfolder inside it.',
+    webm: 'Renders in real time (takes as long as the take). Alpha plays in Chrome and Resolve; AE/Premiere need PNG.',
+    mp4: 'No transparency. The background color fills behind the image.',
+  }[fmt];
+  const sel = $('sizeSel'), prev = sel.value || '1';
+  sel.innerHTML = '';
+  const opts = [['1', '1×'], ['2', '2×'], ['native', 'Image pixels']];
+  for (const [v, label] of opts) {
+    const o = document.createElement('option'); o.value = v;
+    if (take) { const [w, h] = exportSize(take, exportFrame(take, $('frameSel').value), v, fmt); o.textContent = `${label} · ${w}×${h}`; }
+    else o.textContent = label;
+    sel.appendChild(o);
+  }
+  sel.value = prev;
+}
+
+let xr = null, comp = null;
+function exportRenderer(w, h) {
+  if (!xr) { xr = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); xr.setPixelRatio(1); xr.setClearColor(0x000000, 0); }
+  xr.setSize(w, h, false);
+  return xr;
+}
+const stampName = () => { const d = new Date(), z = n => String(n).padStart(2, '0'); return `jiggle_${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`; };
+const toBlob = (c, type) => new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('Could not encode frame')), type));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+// minimal store-only zip writer (PNGs are already compressed)
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+class ZipWriter {
+  constructor() { this.parts = []; this.dir = []; this.off = 0; }
+  add(name, blob, crc) {
+    const nb = new TextEncoder().encode(name), h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(12, 0x21, true);
+    h.setUint32(14, crc, true); h.setUint32(18, blob.size, true); h.setUint32(22, blob.size, true); h.setUint16(26, nb.length, true);
+    this.parts.push(h, nb, blob);
+    this.dir.push({ nb, crc, size: blob.size, off: this.off });
+    this.off += 30 + nb.length + blob.size;
+  }
+  blob() {
+    const cd = []; let cdSize = 0;
+    for (const e of this.dir) {
+      const h = new DataView(new ArrayBuffer(46));
+      h.setUint32(0, 0x02014b50, true); h.setUint16(4, 20, true); h.setUint16(6, 20, true); h.setUint16(14, 0x21, true);
+      h.setUint32(16, e.crc, true); h.setUint32(20, e.size, true); h.setUint32(24, e.size, true); h.setUint16(28, e.nb.length, true);
+      h.setUint32(42, e.off, true);
+      cd.push(h, e.nb); cdSize += 46 + e.nb.length;
+    }
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, this.dir.length, true); end.setUint16(10, this.dir.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, this.off, true);
+    return new Blob([...this.parts, ...cd, end], { type: 'application/zip' });
+  }
+}
+
+// MediaRecorder WebMs have no Duration, so players/editors can't scrub them. Insert one into Segment > Info.
+async function fixWebmDuration(blob, ms) {
+  try {
+    const b = new Uint8Array(await blob.arrayBuffer());
+    const vlen = i => { let n = 1, m = 0x80; while (n <= 8 && !(b[i] & m)) { n++; m >>= 1; } return n; };
+    const readId = i => { const n = vlen(i); let v = 0; for (let k = 0; k < n; k++) v = v * 256 + b[i + k]; return [v, n]; };
+    const readSize = i => { const n = vlen(i); let v = b[i] & (0xff >> n), unknown = v === (0xff >> n); for (let k = 1; k < n; k++) { v = v * 256 + b[i + k]; if (b[i + k] !== 0xff) unknown = false; } return [v, n, unknown]; };
+    let i = 0;
+    let [id, n] = readId(i); if (id !== 0x1A45DFA3) return blob;
+    let [sz, sn] = readSize(i + n); i += n + sn + sz;                    // skip EBML header
+    [id, n] = readId(i); if (id !== 0x18538067) return blob;              // Segment
+    const segSizeAt = i + n; const [segSize, segSn, segUnknown] = readSize(segSizeAt);
+    let j = segSizeAt + segSn;
+    while (j < b.length) {
+      const [cid, cn] = readId(j), [csz, csn] = readSize(j + cn);
+      if (cid === 0x114D9B74) return blob;                                // SeekHead offsets would break; leave as is
+      if (cid === 0x1549A966) {                                           // Info
+        const body = b.subarray(j + cn + csn, j + cn + csn + csz);
+        for (let k = 0; k < body.length;) {                               // already has a Duration? leave it
+          const bi = j + cn + csn + k, [id2, n2] = readId(bi), [s2, sn2] = readSize(bi + n2);
+          if (id2 === 0x4489) return blob;
+          k += n2 + sn2 + s2;
+        }
+        const dur = new Uint8Array(11); dur[0] = 0x44; dur[1] = 0x89; dur[2] = 0x88; new DataView(dur.buffer).setFloat64(3, ms);
+        const newSize = csz + dur.length, hdr = new Uint8Array(4 + 8);
+        hdr.set([0x15, 0x49, 0xA9, 0x66, 0x01]); let v = newSize; for (let q = 11; q >= 5; q--) { hdr[q] = v & 0xff; v = Math.floor(v / 256); }
+        const parts = [b.subarray(0, j), hdr, body, dur, b.subarray(j + cn + csn + csz)];
+        if (!segUnknown) {                                                // grow a known Segment size in place
+          const grow = segSize + (hdr.length + dur.length) - (cn + csn);
+          if (grow >= 2 ** (7 * segSn) - 1) return blob;
+          const head = b.slice(0, j); let g = grow;
+          for (let q = segSn - 1; q >= 0; q--) { head[segSizeAt + q] = g & 0xff; g = Math.floor(g / 256); }
+          head[segSizeAt] |= 0x80 >> (segSn - 1);
+          parts[0] = head;
+        }
+        return new Blob(parts, { type: 'video/webm' });
+      }
+      if (cid === 0x1F43B675) break;                                      // reached Clusters without Info
+      j += cn + csn + csz;
+    }
+  } catch (e) { console.warn('webm duration fix skipped', e); }
+  return blob;
+}
+
+async function makeSink(fmt, o) {
+  const pad = i => `${o.name}_${String(i).padStart(5, '0')}.png`;
+  if (fmt === 'zip') {
+    const zip = new ZipWriter();
+    return {
+      async frame(i) { const b = await toBlob(o.canvas, 'image/png'); zip.add(pad(i), b, crc32(new Uint8Array(await b.arrayBuffer()))); },
+      async finish() { if (zip.off > 0xFFFFFFFF) throw new Error('Over 4 GB, use the folder export instead.'); download(zip.blob(), o.name + '.zip'); return o.name + '.zip'; },
+    };
+  }
+  if (fmt === 'folder') {
+    const sub = await o.dir.getDirectoryHandle(o.name, { create: true });
+    return {
+      async frame(i) {
+        const b = await toBlob(o.canvas, 'image/png');
+        const fh = await sub.getFileHandle(pad(i), { create: true }), w = await fh.createWritable();
+        await w.write(b); await w.close();
+      },
+      async finish() { return `${o.dir.name}/${o.name}/`; },
+    };
+  }
+  if (fmt === 'mp4') {
+    const { Muxer, ArrayBufferTarget } = await import('https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/build/mp4-muxer.mjs');
+    if (!comp) comp = document.createElement('canvas');
+    comp.width = o.w; comp.height = o.h;
+    const cx = comp.getContext('2d');
+    const target = new ArrayBufferTarget();
+    const muxer = new Muxer({ target, video: { codec: 'avc', width: o.w, height: o.h, frameRate: o.fps }, fastStart: 'in-memory' });
+    let err = null;
+    const enc = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: e => err = e });
+    const cfg = { codec: 'avc1.640034', width: o.w, height: o.h, framerate: o.fps,
+      bitrate: Math.min(60e6, Math.max(4e6, o.w * o.h * o.fps * 0.2)), avc: { format: 'avc' } };
+    if (!(await VideoEncoder.isConfigSupported(cfg)).supported) throw new Error(`This browser can't encode ${o.w}×${o.h} H.264. Try a smaller size.`);
+    enc.configure(cfg);
+    return {
+      async frame(i) {
+        if (err) throw err;
+        cx.fillStyle = o.bg; cx.fillRect(0, 0, o.w, o.h); cx.drawImage(o.canvas, 0, 0);
+        const vf = new VideoFrame(comp, { timestamp: Math.round(i * 1e6 / o.fps), duration: Math.round(1e6 / o.fps) });
+        enc.encode(vf, { keyFrame: i % (o.fps * 2) === 0 }); vf.close();
+        while (enc.encodeQueueSize > 6) await sleep(2);
+      },
+      async finish() { await enc.flush(); if (err) throw err; muxer.finalize(); enc.close(); download(new Blob([target.buffer], { type: 'video/mp4' }), o.name + '.mp4'); return o.name + '.mp4'; },
+      abort() { try { enc.close(); } catch {} },
+    };
+  }
+  if (fmt === 'webm') {
+    // WebCodecs can't encode alpha in Chrome yet, but MediaRecorder's VP8/VP9 path keeps it. Real-time only.
+    const mime = ['video/webm;codecs=vp8', 'video/webm;codecs=vp9'].find(m => MediaRecorder.isTypeSupported(m));
+    if (!mime) throw new Error('This browser has no WebM recorder. Use the PNG sequence.');
+    const stream = o.canvas.captureStream(0), track = stream.getVideoTracks()[0];
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: Math.min(80e6, Math.max(8e6, o.w * o.h * o.fps * 0.25)) });
+    const chunks = []; rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+    const stopped = new Promise(r => rec.onstop = r);
+    rec.start(250);
+    let t0 = 0;
+    return {
+      async frame(i) {
+        if (i === 0) t0 = performance.now();
+        track.requestFrame();
+        const wait = t0 + (i + 1) * 1000 / o.fps - performance.now();
+        if (wait > 0) await sleep(wait);
+      },
+      async finish() {
+        rec.stop(); await stopped; track.stop();
+        const raw = new Blob(chunks, { type: 'video/webm' });
+        download(await fixWebmDuration(raw, o.frames * 1000 / o.fps), o.name + '.webm');
+        return o.name + '.webm';
+      },
+      abort() { try { rec.stop(); track.stop(); } catch {} },
+    };
+  }
+}
+
+async function doExport() {
+  const take = REC.take;
+  if (!take || busy || REC.on) return;
+  const fmt = $('fmt').value, fps = EXP.fps;
+  const fr = exportFrame(take, $('frameSel').value);
+  const [w, h] = exportSize(take, fr, $('sizeSel').value, fmt);
+  let dir = null;
+  if (fmt === 'folder') { try { dir = await showDirectoryPicker({ mode: 'readwrite', id: 'jiggle-export' }); } catch { return; } }
+  const N = Math.floor(take.dur * fps + 1e-6) + 1;
+  const r = exportRenderer(w, h);
+  const cam = new THREE.OrthographicCamera(fr.cx - fr.w / 2, fr.cx + fr.w / 2, fr.cy + fr.h / 2, fr.cy - fr.h / 2, -1000, 1000);
+  const name = stampName();
+  cancelExport = false;
+  $('busy').hidden = false; $('busyTitle').textContent = `Exporting ${w}×${h} · ${fps} fps`;
+  $('busyBar').style.width = '0%'; $('busyInfo').textContent = 'Starting…';
+  const st = takeBegin(take);
+  let sink = null, result = null;
+  try {
+    sink = await makeSink(fmt, { w, h, fps, dir, name, frames: N, canvas: r.domElement, bg: $('bgColor').value });
+    for (let i = 0; i < N && !cancelExport; i++) {
+      takeStep(st, i / fps, i ? 1 / fps : 0);
+      r.render(scene, cam);
+      await sink.frame(i);
+      $('busyBar').style.width = ((i + 1) / N * 100).toFixed(1) + '%';
+      $('busyInfo').textContent = `Frame ${i + 1} of ${N}`;
+      if (fmt !== 'webm' && i % 3 === 2) await sleep(0);   // let the progress bar paint
+    }
+    if (cancelExport) { sink.abort?.(); $('exportNote').textContent = 'Export cancelled.'; }
+    else { $('busyInfo').textContent = 'Finishing…'; result = await sink.finish(); }
+  } catch (e) {
+    console.error(e); sink?.abort?.();
+    $('exportNote').innerHTML = '<span style="color:#ff8080">Export failed: ' + (e.message || e) + '</span>';
+  } finally {
+    takeEnd(st);
+    $('busy').hidden = true;
+  }
+  if (result) $('exportNote').innerHTML = `<span style="color:#7ee2a8">Saved ${N} frames → ${result}</span>`;
+}
+$('busyCancel').onclick = () => { cancelExport = true; $('busyInfo').textContent = 'Cancelling…'; };
+$('recBtn').onclick = () => REC.on ? stopRec() : startRec();
+$('playBtn').onclick = playTake;
+$('exportBtn').onclick = doExport;
+$('fmt').onchange = $('frameSel').onchange = refreshExportUI;
+$('fpsSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+  EXP.fps = +b.dataset.v;
+  $('fpsSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  refreshExportUI();
+});
+
+/* ------------------------------------------------------------------ reference background (view only) */
+const refbg = $('refbg'); let refURL = null;
+$('refBtn').onclick = () => $('refFile').click();
+$('refFile').onchange = e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  if (refURL) URL.revokeObjectURL(refURL);
+  refURL = URL.createObjectURL(f);
+  refbg.style.backgroundImage = `url("${refURL}")`; applyView();
+  $('refClear').disabled = false;
+};
+$('refClear').onclick = () => {
+  refbg.style.backgroundImage = ''; applyView(); if (refURL) URL.revokeObjectURL(refURL); refURL = null; $('refClear').disabled = true;
+};
+$('refFit').querySelectorAll('button').forEach(b => b.onclick = () => {
+  refbg.style.backgroundSize = b.dataset.v;
+  $('refFit').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+});
+slider($('refSliders'), { label: 'Opacity', min: 0.05, max: 1, step: 0.01, value: 1, fmt: v => Math.round(v * 100) + '%', onInput: v => refbg.style.opacity = v });
+
+/* ------------------------------------------------------------------ view zoom: pasteboard + export frame */
+frameGroup = new THREE.Group(); scene.add(frameGroup);
+// checkerboard inside the canvas = "this is transparent in the export" (hidden when a reference bg is loaded)
+const checker = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+  depthTest: false, depthWrite: false,
+  vertexShader: `void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `void main(){ vec2 c = floor(gl_FragCoord.xy / 14.0); float k = mod(c.x + c.y, 2.0);
+    gl_FragColor = vec4(mix(vec3(0.085,0.09,0.11), vec3(0.11,0.117,0.14), k), 1.0); }`,
+}));
+checker.renderOrder = -1; frameGroup.add(checker);
+const safeMat = new THREE.MeshBasicMaterial({ color: 0x58b6ff, transparent: true, opacity: 0.1, depthTest: false });
+const safeBands = [0, 1, 2, 3].map(() => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), safeMat); m.renderOrder = 4; frameGroup.add(m); return m; });
+const safeGeo = new THREE.BufferGeometry();
+safeGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(15), 3));
+const safeLine = new THREE.Line(safeGeo, new THREE.LineBasicMaterial({ color: 0x58b6ff, transparent: true, opacity: 0.7, depthTest: false }));
+safeLine.renderOrder = 6; safeLine.frustumCulled = false; frameGroup.add(safeLine);
+const dimMat = new THREE.MeshBasicMaterial({ color: 0x0b0c10, transparent: true, opacity: 0.6, depthTest: false });
+const dims = [0, 1, 2, 3].map(() => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), dimMat); m.renderOrder = 5; frameGroup.add(m); return m; });
+const outlineGeo = new THREE.BufferGeometry();
+outlineGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(15), 3));
+const outline = new THREE.Line(outlineGeo, new THREE.LineDashedMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, dashSize: 6, gapSize: 5, depthTest: false }));
+outline.renderOrder = 6; outline.frustumCulled = false; frameGroup.add(outline);
+function layoutFrame() {
+  const w = FW() / 2, h = FH() / 2, B = 1e5;
+  const set = (m, x0, y0, x1, y1) => { m.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0); m.scale.set(x1 - x0, y1 - y0, 1); };
+  set(dims[0], -B, h, B, B); set(dims[1], -B, -B, B, -h); set(dims[2], -B, -h, -w, h); set(dims[3], w, -h, B, h);
+  const a = outlineGeo.attributes.position.array;
+  a.set([-w, -h, 0, w, -h, 0, w, h, 0, -w, h, 0, -w, -h, 0]); outlineGeo.attributes.position.needsUpdate = true;
+  outline.computeLineDistances();
+  outline.material.dashSize = 6 / view.zoom; outline.material.gapSize = 5 / view.zoom;
+  outline.visible = FRAME.fixed || Math.abs(view.zoom - 1) > 1e-3 || Math.abs(view.x) > 0.5 || Math.abs(view.y) > 0.5;
+  set(checker, -w, -h, w, h);
+  checker.visible = !document.getElementById('refbg').style.backgroundImage;
+  // Instagram Reel UI covers ~14% top, ~35% bottom (caption/buttons) and ~6% each side
+  const showSafe = FRAME.fixed && Math.abs(FRAME.w / FRAME.h - 9 / 16) < 0.01 && $('tSafe').checked;
+  const st = h - 2 * h * 0.14, sb = -h + 2 * h * 0.35, sl = -w + 2 * w * 0.06, sr = w - 2 * w * 0.06;
+  set(safeBands[0], -w, st, w, h); set(safeBands[1], -w, -h, w, sb); set(safeBands[2], -w, sb, sl, st); set(safeBands[3], sr, sb, w, st);
+  safeGeo.attributes.position.array.set([sl, sb, 0, sr, sb, 0, sr, st, 0, sl, st, 0, sl, sb, 0]); safeGeo.attributes.position.needsUpdate = true;
+  safeBands.forEach(m => m.visible = showSafe); safeLine.visible = showSafe;
+}
+
+function setCanvas(v, quiet) {
+  if (REC.on || busy) return;
+  const custom = v === 'custom';
+  $('customRow').hidden = !custom;
+  if (v === 'stage') FRAME.fixed = false;
+  else {
+    const [w, h] = custom ? [+$('cw').value, +$('ch').value] : v.split('x').map(Number);
+    FRAME.fixed = true; FRAME.w = Math.max(16, Math.min(4096, even(w || 1080))); FRAME.h = Math.max(16, Math.min(4096, even(h || 1920)));
+    if (custom) { $('cw').value = FRAME.w; $('ch').value = FRAME.h; }
+  }
+  $('safeToggle').hidden = !(FRAME.fixed && Math.abs(FRAME.w / FRAME.h - 9 / 16) < 0.01);
+  $('canvasInfo').textContent = FRAME.fixed
+    ? `Exports at ${FRAME.w}×${FRAME.h} (1×). Anything outside the dashed frame is cut off.`
+    : 'The canvas is your window size. Pick a preset for a fixed export size.';
+  try { localStorage.setItem('jp.canvas', JSON.stringify({ v, w: FRAME.w, h: FRAME.h })); } catch {}
+  REC.take = null;
+  if (srcImage) recenter();
+  fitFrameView();
+  if (!quiet) refreshExportUI();
+}
+$('canvasSel').onchange = e => setCanvas(e.target.value);
+$('cw').onchange = $('ch').onchange = () => setCanvas('custom');
+$('tSafe').onchange = () => layoutFrame();
+try {
+  const c = JSON.parse(localStorage.getItem('jp.canvas') || 'null');
+  if (c) { if (c.v === 'custom') { $('cw').value = c.w; $('ch').value = c.h; } $('canvasSel').value = c.v; setCanvas(c.v, true); }
+} catch {}
+if (!$('canvasInfo').textContent) setCanvas('stage', true);
+layoutFrame();
+function fitView() {
+  let x0 = -FW() / 2, x1 = FW() / 2, y0 = -FH() / 2, y1 = FH() / 2;
+  if (srcImage) {
+    const c = Math.abs(Math.cos(img.rot)), s = Math.abs(Math.sin(img.rot));
+    const ex = img.scale * (c * W / 2 + s * H / 2), ey = img.scale * (s * W / 2 + c * H / 2);
+    x0 = Math.min(x0, img.x - ex); x1 = Math.max(x1, img.x + ex); y0 = Math.min(y0, img.y - ey); y1 = Math.max(y1, img.y + ey);
+  }
+  view.zoom = Math.min(8, Math.max(0.1, Math.min(VW / ((x1 - x0) * 1.12), VH / ((y1 - y0) * 1.12))));
+  view.x = (x0 + x1) / 2; view.y = (y0 + y1) / 2; view.auto = false;
+  applyView();
+}
+$('zIn').onclick = () => setZoom(view.zoom * 1.25);
+$('zOut').onclick = () => setZoom(view.zoom / 1.25);
+$('zPct').onclick = resetView;
+$('zFit').onclick = fitView;
+applyView();
+
+/* ------------------------------------------------------------------ loop */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 1 / 20); last = now;
+  if (srcImage && !busy) {
+    moveImage(dt);
+    simulate(dt);
+    deform();
+    group.position.set(img.x, img.y, 0); group.rotation.z = img.rot; group.scale.setScalar(img.scale);
+    updatePinVisuals();
+    material.uniforms.uShowW.value = S.showWeights ? 1 : isPinTool() ? 0.55 : 0;
+    prevT = snapT();
+    if (REC.on) recSample(now);
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+appReady = true;
+refreshTool();
+refreshExportUI();
+requestAnimationFrame(frame);
+window.__jp = { S, img, get pins() { return pins; }, get jig() { return jig; } };
+</script>
+</body>
+</html>
